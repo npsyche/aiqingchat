@@ -1,8 +1,10 @@
 
-import React, { useState, useEffect, useRef, useContext } from 'react';
+import React, { useState, useEffect, useRef, useContext, useMemo } from 'react';
 import { Character, Message, Author, SavedModel, UserPersona } from '../types';
 import { geminiService } from '../services/geminiService';
 import { DialogContext } from '../DialogContext';
+import { marked } from 'marked';
+import DOMPurify from 'dompurify';
 
 interface ChatViewProps {
   character: Character;
@@ -105,6 +107,14 @@ const ChatView: React.FC<ChatViewProps> = ({
   const currentModelName = modelOptions.find(m => m.name === selectedModel)?.displayName || selectedModel;
   
   const activePersona = userPersonas.find(p => p.id === activePersonaId);
+
+  // Configure marked options
+  useEffect(() => {
+    marked.setOptions({
+      breaks: true, // Enable GFM line breaks
+      gfm: true,
+    });
+  }, []);
 
   // Click outside to close menu
   useEffect(() => {
@@ -507,18 +517,40 @@ const ChatView: React.FC<ChatViewProps> = ({
       setShowMenu(false);
   };
 
+  // Render Markdown Content
   const renderMessageContent = (text: string) => {
-    const regex = /(\([\s\S]*?\)|（[\s\S]*?）|".*?"|“.*?”)/g;
-    const parts = text.split(regex);
-    return parts.map((part, i) => {
-      if (part.startsWith('"') || part.startsWith('“')) {
-        return <span key={i} className="text-pink-300 font-bold">{part}</span>;
-      }
-      if (part.startsWith('(') || part.startsWith('（')) {
-        return <span key={i} className="text-gray-200 italic text-[0.9em]">{part}</span>;
-      }
-      return <span key={i} className="text-slate-200">{part}</span>;
-    });
+      // 检查是否有markdown语法特征，有的话再进行markdown解析
+    const markdownRegex = /(\*\*|__|\*|_|~~|`|>|\[|\]|\(|\)|#|-|\+|!)/;
+    if (!markdownRegex.test(text)) {
+      const regex = /(\([\s\S]*?\)|（[\s\S]*?）|".*?"|“.*?”)/g;
+      const parts = text.split(regex);
+      return parts.map((part, i) => {
+        if (part.startsWith('"') || part.startsWith('“')) {
+          return <span key={i} className="text-pink-300 font-bold">{part}</span>;
+        }
+        if (part.startsWith('(') || part.startsWith('（')) {
+          return <span key={i} className="text-gray-200 italic text-[0.9em]">{part}</span>;
+        }
+        return <span key={i} className="text-slate-200">{part}</span>;
+      });
+    }
+      
+    try {
+      // 1. Parse Markdown to HTML
+      const rawHtml = marked.parse(text) as string;
+      // 2. Sanitize HTML
+      const cleanHtml = DOMPurify.sanitize(rawHtml);
+      
+      return (
+        <div 
+          className="markdown-body"
+          dangerouslySetInnerHTML={{ __html: cleanHtml }}
+        />
+      );
+    } catch (e) {
+      // Fallback
+      return <div className="whitespace-pre-wrap">{text}</div>;
+    }
   };
 
   const bgSrc = bgList[activeBgIndex];

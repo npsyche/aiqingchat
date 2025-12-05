@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -30,6 +31,69 @@
         -webkit-backdrop-filter: blur(16px);
         border: 1px solid rgba(255, 255, 255, 0.08);
       }
+
+      /* Markdown Styles for Chat */
+      .markdown-body {
+        font-size: 15px;
+        line-height: 1.75;
+      }
+      .markdown-body > *:first-child { margin-top: 0; }
+      .markdown-body > *:last-child { margin-bottom: 0; }
+      
+      .markdown-body p { margin-bottom: 0.5em; white-space: pre-wrap; }
+      .markdown-body ul { list-style-type: disc; padding-left: 1.4em; margin-bottom: 0.5em; }
+      .markdown-body ol { list-style-type: decimal; padding-left: 1.4em; margin-bottom: 0.5em; }
+      .markdown-body li { margin-bottom: 0.2em; }
+      
+      .markdown-body pre { 
+        background: rgba(0, 0, 0, 0.4); 
+        padding: 0.75rem; 
+        border-radius: 0.5rem; 
+        overflow-x: auto; 
+        margin: 0.75rem 0; 
+        border: 1px solid rgba(255, 255, 255, 0.1); 
+      }
+      .markdown-body code { 
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.9em;
+      }
+      /* Inline code */
+      .markdown-body :not(pre) > code {
+        background: rgba(255, 255, 255, 0.15); 
+        padding: 0.1rem 0.3rem; 
+        border-radius: 0.25rem; 
+        color: #fce7f3; /* pink-100 */
+      }
+      /* Block code */
+      .markdown-body pre code { 
+        background: transparent; 
+        padding: 0; 
+        color: #e2e8f0; 
+        display: block; 
+      }
+      
+      .markdown-body strong { font-weight: 700; color: #f9a8d4; /* pink-300 */ }
+      .markdown-body em { font-style: italic; opacity: 0.9; color: #cbd5e1; }
+      .markdown-body blockquote { 
+        border-left: 3px solid rgba(236, 72, 153, 0.5); 
+        padding-left: 0.8rem; 
+        color: #94a3b8; 
+        font-style: italic; 
+        margin: 0.5rem 0; 
+        background: rgba(255,255,255,0.03);
+        padding-top: 0.2rem;
+        padding-bottom: 0.2rem;
+        border-radius: 0 0.25rem 0.25rem 0;
+      }
+      .markdown-body h1, .markdown-body h2, .markdown-body h3 { 
+        font-weight: 700; 
+        margin-top: 1em; 
+        margin-bottom: 0.5em; 
+        color: #fce7f3; 
+        font-size: 1.1em;
+      }
+      .markdown-body a { color: #f472b6; text-decoration: underline; text-underline-offset: 2px; }
+      .markdown-body hr { border-color: rgba(255,255,255,0.1); margin: 1em 0; }
     </style>
   <script type="importmap">
 {
@@ -37,12 +101,16 @@
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "marked": "https://esm.sh/marked@12.0.0",
+    "dompurify": "https://esm.sh/dompurify@3.0.9"
   }
 }
 </script>
+<link rel="stylesheet" href="/index.css">
 </head>
   <body class="bg-[#1a1a2e] text-slate-100 antialiased selection:bg-pink-500 selection:text-white">
     <div id="root" class="w-full min-h-[100dvh]"></div>
-  </body>
+  <script type="module" src="/index.tsx"></script>
+</body>
 </html>
