@@ -46,14 +46,63 @@ export class GeminiService {
 
   /**
    * Initializes a chat session with specific character instructions and history
+   * @param characterInstruction The core character prompt
+   * @param history Full message history
+   * @param model Model name
+   * @param userPersona Optional user persona description
+   * @param historyLimit Max number of *rounds* (pairs of user/model) to keep in context. Default 20.
    */
-  async startChat(systemInstruction: string, history: Message[], model: string = 'gemini-2.5-flash') {
+  async startChat(
+      characterInstruction: string, 
+      history: Message[], 
+      model: string = 'gemini-2.5-flash', 
+      userPersona: string = '',
+      historyLimit: number = 20
+  ) {
     this.currentModel = model;
-    this.systemInstruction = systemInstruction;
+    
+    // 1. Combine Instructions
+    // We append the user persona to the system instruction so the model knows who it is talking to.
+    let finalSystemInstruction = characterInstruction;
+    if (userPersona && userPersona.trim().length > 0) {
+        finalSystemInstruction += `\n\n[User Identity/Persona Context]\nThe user you are talking to is defined as follows:\n${userPersona}\nStay in character and react to this identity accordingly.`;
+    }
+    this.systemInstruction = finalSystemInstruction;
+
+    // 2. Truncate History
+    // Keep Memory nodes (important context) + last N messages based on limit
+    // A "round" is typically 2 messages. So limit * 2.
+    const maxMessages = historyLimit * 2;
+    
+    // Separate memory nodes (always keep) and regular conversation
+    const memories = history.filter(m => m.isMemory);
+    const conversation = history.filter(m => !m.isMemory);
+
+    const limitedConversation = conversation.slice(-maxMessages); // Take the last N messages
+    
+    // Recombine: Memories first, then recent conversation
+    // Note: We need to sort by timestamp to ensure correct order if we mix them, 
+    // but usually memories are older or injected. 
+    // For safety, let's just prepend memories to the limited conversation if they aren't already there.
+    // However, the `history` passed in is usually chronologically sorted. 
+    // A simpler approach for the SDK: just filter the *entire* list but ensure we don't lose the flow.
+    
+    // Let's go with the safe slice approach on the full array, but prioritize keeping the System/Memory notes if they exist?
+    // Actually, `messages` in UI are all chronological.
+    // We should keep the *latest* `historyLimit * 2` messages.
+    // If there are memory nodes, they act as "summaries" and should ideally be recent or sticky.
+    // Current implementation treats memories as standard messages in the stream.
+    
+    const effectiveHistory = limitedConversation.length < conversation.length 
+        ? [...memories, ...limitedConversation] 
+        : history;
+
+    // Sort again just to be safe
+    effectiveHistory.sort((a, b) => a.timestamp - b.timestamp);
 
     if (this.provider === 'google' && this.client) {
       // Google SDK Mode
-      const formattedHistory: Content[] = history.map(msg => {
+      const formattedHistory: Content[] = effectiveHistory.map(msg => {
         // If it's a memory node, format it as a user note to context
         const text = msg.isMemory 
           ? `[System Note: The following is a summary of the previous conversation to provide context: ${msg.text}]` 
@@ -69,7 +118,7 @@ export class GeminiService {
         model: model,
         history: formattedHistory,
         config: {
-          systemInstruction: systemInstruction,
+          systemInstruction: this.systemInstruction,
           temperature: 0.9,
           topK: 64,
           topP: 0.95,
@@ -77,7 +126,7 @@ export class GeminiService {
       });
     } else {
       // OpenRouter/OpenAI Mode - Prepare history
-      this.manualHistory = history.map(msg => {
+      this.manualHistory = effectiveHistory.map(msg => {
          const text = msg.isMemory 
           ? `[System Note: Previous conversation summary: ${msg.text}]` 
           : msg.text;

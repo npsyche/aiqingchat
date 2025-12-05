@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+
+import React, { useState, useContext } from 'react';
 import { Character, Author, Message } from '../types';
+import { DialogContext } from '../DialogContext';
 
 interface CharacterProfileViewProps {
   character: Character;
@@ -12,6 +14,8 @@ interface CharacterProfileViewProps {
   onToggleFavorite: () => void;
   isFavorited: boolean;
   onAuthorClick: (id: string) => void;
+  onRegenerateMemory: () => Promise<void>;
+  onDeleteMemory: (id: string) => void;
 }
 
 const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({
@@ -24,9 +28,13 @@ const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({
   currentUserId,
   onToggleFavorite,
   isFavorited,
-  onAuthorClick
+  onAuthorClick,
+  onRegenerateMemory,
+  onDeleteMemory
 }) => {
+  const showDialog = useContext(DialogContext);
   const [activeTab, setActiveTab] = useState<'MEMORY' | 'WHISPER' | 'DYNAMIC'>('MEMORY');
+  const [isGeneratingMemory, setIsGeneratingMemory] = useState(false);
 
   const isOwner = character.authorId === currentUserId;
   const bgSrc = character.backgroundImage || (character.backgroundImages && character.backgroundImages[0]) || `https://picsum.photos/seed/${character.avatarSeed}/800/1200`;
@@ -37,6 +45,23 @@ const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({
 
   // Filter memories from messages
   const memories = messages.filter(m => m.isMemory);
+
+  const handleRegenerateClick = async () => {
+    setIsGeneratingMemory(true);
+    await onRegenerateMemory();
+    setIsGeneratingMemory(false);
+  };
+
+  const handleDeleteClick = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    showDialog({
+        type: 'confirm',
+        title: '确认遗忘？',
+        message: '删除这条记忆后，角色可能会忘记相关的对话细节。',
+        confirmText: '确认删除',
+        onConfirm: () => onDeleteMemory(id)
+    });
+  };
 
   // Mock Data for Whispers and Dynamics (Since backend doesn't exist for these yet)
   const mockWhispers = [
@@ -155,24 +180,49 @@ const CharacterProfileView: React.FC<CharacterProfileViewProps> = ({
             {/* Tab Content */}
             <div className="min-h-[200px]">
                 {activeTab === 'MEMORY' && (
-                    <div className="space-y-3 animate-fadeIn">
+                    <div className="space-y-4 animate-fadeIn">
+                        {/* Generate Button */}
+                        <button 
+                            onClick={handleRegenerateClick}
+                            disabled={isGeneratingMemory}
+                            className="w-full py-3 bg-gradient-to-r from-purple-900/40 to-pink-900/40 border border-pink-500/20 rounded-xl text-pink-300 text-sm font-bold flex items-center justify-center gap-2 hover:bg-pink-500/10 transition active:scale-[0.98] disabled:opacity-50"
+                        >
+                            {isGeneratingMemory ? (
+                                 <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            ) : (
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+                            )}
+                            {isGeneratingMemory ? '正在梳理记忆...' : '基于当前对话重新生成记忆'}
+                        </button>
+
                         {memories.length > 0 ? (
                             memories.map(m => (
-                                <div key={m.id} className="bg-white/5 p-3 rounded-xl border border-white/5 flex gap-3">
-                                    <div className="mt-1 text-pink-400">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h10"/><path d="M9 4v16"/><path d="m3 9 3 3-3 3"/><path d="M14 8V6c0-1 1-2 2-2h4c1 0 2 1 2 2v12c0 1-1 2-2 2h-4c-1 0-2-1-2-2v-2"/></svg>
+                                <div key={m.id} className="bg-white/5 p-4 rounded-xl border border-white/5 relative group">
+                                    <div className="flex gap-3">
+                                         <div className="mt-1 text-pink-400 shrink-0">
+                                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12h10"/><path d="M9 4v16"/><path d="m3 9 3 3-3 3"/><path d="M14 8V6c0-1 1-2 2-2h4c1 0 2 1 2 2v12c0 1-1 2-2 2h-4c-1 0-2-1-2-2v-2"/></svg>
+                                         </div>
+                                         <div className="flex-1">
+                                             <p className="text-xs text-gray-500 mb-1.5">{new Date(m.timestamp).toLocaleString()}</p>
+                                             <p className="text-sm text-gray-300 italic leading-relaxed">{m.text}</p>
+                                         </div>
                                     </div>
-                                    <div>
-                                        <p className="text-xs text-gray-500 mb-1">{new Date(m.timestamp).toLocaleDateString()}</p>
-                                        <p className="text-sm text-gray-300 italic">{m.text}</p>
-                                    </div>
+                                    
+                                    {/* Delete Button */}
+                                    <button 
+                                        onClick={(e) => handleDeleteClick(m.id, e)}
+                                        className="absolute top-2 right-2 p-2 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity bg-black/20 rounded-full"
+                                        title="遗忘这段记忆"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                                    </button>
                                 </div>
                             ))
                         ) : (
                             <EmptyState text="还没有生成任何关键记忆..." icon="memory" />
                         )}
-                         <div className="p-3 bg-white/5 rounded-xl border border-white/5 opacity-50">
-                            <p className="text-xs text-center text-gray-500">记忆碎片由 AI 根据聊天深度自动生成</p>
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/5 opacity-50">
+                            <p className="text-xs text-center text-gray-500">记忆碎片有助于角色记住你们之间发生的重要事情</p>
                         </div>
                     </div>
                 )}

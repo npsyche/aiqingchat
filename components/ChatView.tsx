@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Character, Message, Author, SavedModel } from '../types';
+import { Character, Message, Author, SavedModel, UserPersona } from '../types';
 import { geminiService } from '../services/geminiService';
 import { DialogContext } from '../DialogContext';
 
@@ -10,6 +11,8 @@ interface ChatViewProps {
   savedModels?: SavedModel[];
   currentUserId: string;
   isFavorited: boolean;
+  userPersonas?: UserPersona[]; // New Prop
+  historyRoundLimit?: number; // New Prop
   onBack: () => void;
   onEdit: () => void;
   onSaveMessages: (messages: Message[]) => void;
@@ -17,6 +20,7 @@ interface ChatViewProps {
   onClearHistory: () => void;
   onToggleFavorite: () => void;
   onViewProfile: () => void;
+  onUpdateCharacter: (character: Character) => void;
 }
 
 const ChatView: React.FC<ChatViewProps> = ({ 
@@ -26,13 +30,16 @@ const ChatView: React.FC<ChatViewProps> = ({
   savedModels = [],
   currentUserId,
   isFavorited,
+  userPersonas = [],
+  historyRoundLimit = 20,
   onBack, 
   onEdit, 
   onSaveMessages, 
   onAuthorClick,
   onClearHistory,
   onToggleFavorite,
-  onViewProfile
+  onViewProfile,
+  onUpdateCharacter
 }) => {
   const showDialog = useContext(DialogContext);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -49,6 +56,10 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
   const [showModelList, setShowModelList] = useState(false);
 
+  // Persona State
+  const [activePersonaId, setActivePersonaId] = useState<string | null>(null);
+  const [showPersonaList, setShowPersonaList] = useState(false);
+
   // Menu State
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -57,8 +68,6 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
-  // Background State
-  const [activeBgIndex, setActiveBgIndex] = useState(0);
   // Construct unique background list
   const bgList = React.useMemo(() => {
      const list: string[] = [];
@@ -71,6 +80,12 @@ const ChatView: React.FC<ChatViewProps> = ({
      if (list.length === 0) list.push(`https://picsum.photos/seed/${character.avatarSeed}/800/1200`);
      return Array.from(new Set(list)); // Dedupe
   }, [character]);
+
+  // Background State - Initialize with the index of the current active background
+  const [activeBgIndex, setActiveBgIndex] = useState(() => {
+      const idx = bgList.findIndex(url => url === character.backgroundImage);
+      return idx >= 0 ? idx : 0;
+  });
 
   // Edit Message State
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
@@ -88,6 +103,8 @@ const ChatView: React.FC<ChatViewProps> = ({
       ];
 
   const currentModelName = modelOptions.find(m => m.name === selectedModel)?.displayName || selectedModel;
+  
+  const activePersona = userPersonas.find(p => p.id === activePersonaId);
 
   // Click outside to close menu
   useEffect(() => {
@@ -135,20 +152,23 @@ const ChatView: React.FC<ChatViewProps> = ({
   }, [initialMessages, character.openingMessage]);
 
   // Initialize Gemini Session
+  // Re-init when activePersona changes or model changes or history limit changes
   useEffect(() => {
     const initChat = async () => {
       try {
-        await geminiService.startChat(character.systemInstruction, messages, selectedModel);
+        const personaContext = activePersona ? activePersona.description : '';
+        await geminiService.startChat(character.systemInstruction, messages, selectedModel, personaContext, historyRoundLimit);
         setHasInitialized(true);
       } catch (e) {
         console.error("Failed to start chat session", e);
+        // We don't set hasInitialized to true here, so users will trigger lazy init or error on send
       }
     };
-    if (messages.length > 0 || hasInitialized === false) {
-        initChat();
-    }
+    // Initialize immediately if parameters change
+    initChat();
+    
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [character.id, character.systemInstruction, selectedModel, messages.length === 0]); 
+  }, [character.id, character.systemInstruction, selectedModel, activePersonaId, historyRoundLimit]); 
 
   // Adjust textarea height
   useEffect(() => {
@@ -184,11 +204,13 @@ const ChatView: React.FC<ChatViewProps> = ({
   const handleSendMessage = async (textOverride?: string) => {
     const userText = textOverride || inputText.trim();
 
-    if (!userText || isLoading || !hasInitialized) return;
+    // REMOVED !hasInitialized from check to allow optimistic UI updates and lazy initialization
+    if (!userText || isLoading) return;
 
     setInputText('');
     setSuggestions([]); 
-    setShowModelList(false); 
+    setShowModelList(false);
+    setShowPersonaList(false);
     
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -208,7 +230,10 @@ const ChatView: React.FC<ChatViewProps> = ({
         const index = messages.findIndex(m => m.id === editingMessage.id);
         if (index !== -1) {
             currentHistory = messages.slice(0, index);
-            await geminiService.startChat(character.systemInstruction, currentHistory, selectedModel);
+            const personaContext = activePersona ? activePersona.description : '';
+            // Re-init session from cutoff point
+            await geminiService.startChat(character.systemInstruction, currentHistory, selectedModel, personaContext, historyRoundLimit);
+            setHasInitialized(true);
         }
         setEditingMessage(null);
     }
@@ -228,6 +253,18 @@ const ChatView: React.FC<ChatViewProps> = ({
     setIsLoading(true);
 
     try {
+      // Lazy Initialization: If session wasn't ready, try to start it now before sending
+      if (!hasInitialized) {
+          try {
+              const personaContext = activePersona ? activePersona.description : '';
+              await geminiService.startChat(character.systemInstruction, currentHistory, selectedModel, personaContext, historyRoundLimit);
+              setHasInitialized(true);
+          } catch (initError) {
+              console.warn("Lazy init failed, continuing to stream will likely fail:", initError);
+              // We continue to sendMessageStream so it throws the specific error we can catch below
+          }
+      }
+
       const stream = geminiService.sendMessageStream(userText);
       
       let fullResponseText = '';
@@ -261,7 +298,8 @@ const ChatView: React.FC<ChatViewProps> = ({
                  const compactedHistory = [memoryNode, ...recentMsgs];
                  setMessages(compactedHistory);
                  onSaveMessages(compactedHistory);
-                 geminiService.startChat(character.systemInstruction, compactedHistory, selectedModel);
+                 const personaContext = activePersona ? activePersona.description : '';
+                 geminiService.startChat(character.systemInstruction, compactedHistory, selectedModel, personaContext, historyRoundLimit);
              } else {
                  onSaveMessages(finalMessages);
              }
@@ -274,7 +312,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       console.error("Chat Error", error);
       setMessages(prev => prev.map(msg => 
          msg.id === botMessageId 
-           ? { ...msg, text: "*(连接中断或出错，请检查网络或配置。)*" } 
+           ? { ...msg, text: "*(连接中断或出错，请检查API Key配置或网络连接。)*" } 
            : msg
       ));
     } finally {
@@ -308,8 +346,10 @@ const ChatView: React.FC<ChatViewProps> = ({
     setIsLoading(true);
 
     try {
-      const historyForSdk = previousMessages.slice(0, -1); 
-      await geminiService.startChat(character.systemInstruction, historyForSdk, selectedModel);
+      const historyForSdk = previousMessages.slice(0, -1);
+      const personaContext = activePersona ? activePersona.description : '';
+      await geminiService.startChat(character.systemInstruction, historyForSdk, selectedModel, personaContext, historyRoundLimit);
+      setHasInitialized(true);
 
       const stream = geminiService.sendMessageStream(userText);
       let fullResponseText = '';
@@ -333,7 +373,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       console.error("Regenerate failed", e);
       setMessages(prev => prev.map(msg => 
          msg.id === botMessageId 
-           ? { ...msg, text: "*(重新生成失败)*" } 
+           ? { ...msg, text: "*(重新生成失败，请检查连接)*" } 
            : msg
       ));
     } finally {
@@ -343,7 +383,11 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   const handleSwitchBackground = () => {
       if (bgList.length > 1) {
-          setActiveBgIndex(prev => (prev + 1) % bgList.length);
+          const nextIndex = (activeBgIndex + 1) % bgList.length;
+          setActiveBgIndex(nextIndex);
+          const nextBg = bgList[nextIndex];
+          // Persist the change
+          onUpdateCharacter({ ...character, backgroundImage: nextBg });
       }
       setShowMenu(false);
   };
@@ -400,7 +444,9 @@ const ChatView: React.FC<ChatViewProps> = ({
         };
         setMessages([openingMsg]);
     }
-    geminiService.startChat(character.systemInstruction, [], selectedModel);
+    const personaContext = activePersona ? activePersona.description : '';
+    geminiService.startChat(character.systemInstruction, [], selectedModel, personaContext, historyRoundLimit);
+    setHasInitialized(true);
     setShowMenu(false);
   };
 
@@ -490,7 +536,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col h-full overflow-hidden bg-[#1a1a2e] font-sans" onClick={() => { showModelList && setShowModelList(false); }}>
+    <div className="fixed inset-0 z-50 flex flex-col h-full overflow-hidden bg-[#1a1a2e] font-sans" onClick={() => { showModelList && setShowModelList(false); showPersonaList && setShowPersonaList(false); }}>
       
       {/* Immersive Background */}
       <div className="absolute inset-0 z-0 bg-[#1a1a2e]">
@@ -693,8 +739,50 @@ const ChatView: React.FC<ChatViewProps> = ({
               )}
            </div>
 
-           {/* Right: Magic Wand only (Actions moved to menu) */}
-           <div className="flex items-center gap-3">
+           {/* Center Right: Actions */}
+           <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+               
+               {/* Persona Mask Selector */}
+               <div className="relative">
+                   <button 
+                      onClick={() => setShowPersonaList(!showPersonaList)}
+                      className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs transition-all backdrop-blur-sm shadow-sm border ${activePersonaId ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : 'bg-white/5 text-gray-400 border-white/10 hover:text-white'}`}
+                   >
+                        <span className="text-lg">🎭</span>
+                        {activePersona && <span className="max-w-[60px] truncate font-bold">{activePersona.name}</span>}
+                   </button>
+                   
+                   {showPersonaList && (
+                       <div className="absolute bottom-full right-0 mb-2 w-48 glass-panel rounded-xl shadow-2xl overflow-hidden z-50 animate-fadeIn bg-[#1a1a2e]/90">
+                           <div className="p-1 max-h-48 overflow-y-auto scrollbar-hide">
+                               <button
+                                  onClick={() => { setActivePersonaId(null); setShowPersonaList(false); }}
+                                  className={`w-full text-left px-3 py-2 text-xs transition truncate flex items-center gap-2 rounded-lg ${!activePersonaId ? 'bg-pink-500/20 text-pink-300 font-bold' : 'text-gray-300 hover:bg-white/5'}`}
+                               >
+                                   <span>🚫</span>
+                                   <span>默认身份 (无)</span>
+                               </button>
+                               {userPersonas.map(p => (
+                                   <button 
+                                      key={p.id}
+                                      onClick={() => { setActivePersonaId(p.id); setShowPersonaList(false); }}
+                                      className={`w-full text-left px-3 py-2 text-xs transition truncate flex items-center gap-2 rounded-lg ${activePersonaId === p.id ? 'bg-pink-500/20 text-pink-300 font-bold' : 'text-gray-300 hover:bg-white/5'}`}
+                                   >
+                                       <span>🎭</span>
+                                       <span>{p.name}</span>
+                                   </button>
+                               ))}
+                               {userPersonas.length === 0 && (
+                                   <div className="px-3 py-2 text-[10px] text-gray-500 text-center">
+                                       暂无身份设定，请去“我的”页面添加
+                                   </div>
+                               )}
+                           </div>
+                       </div>
+                   )}
+               </div>
+
+               {/* Magic Wand */}
                {!isLoading && !suggestions.length && messages.length > 0 && !editingMessage && (
                  <button 
                     onClick={handleMagicClick}
@@ -758,7 +846,7 @@ const ChatView: React.FC<ChatViewProps> = ({
               placeholder={editingMessage ? "修改内容..." : `给 ${character.name} 发消息...`}
               rows={1}
               className="flex-1 bg-transparent text-gray-100 placeholder-gray-500 px-2 py-3 outline-none border-none text-base resize-none overflow-y-auto max-h-32 scrollbar-hide"
-              disabled={isLoading || !hasInitialized}
+              disabled={isLoading}
             />
             
             <button 

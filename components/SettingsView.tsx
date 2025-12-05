@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useContext } from 'react';
 import { SavedModel } from '../types';
 import { geminiService } from '../services/geminiService';
@@ -5,9 +6,11 @@ import { DialogContext } from '../DialogContext';
 
 interface SettingsViewProps {
   onBack: () => void;
+  historyLimit?: number;
+  onHistoryLimitChange?: (limit: number) => void;
 }
 
-const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
+const SettingsView: React.FC<SettingsViewProps> = ({ onBack, historyLimit = 20, onHistoryLimitChange }) => {
   const showDialog = useContext(DialogContext);
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -17,6 +20,9 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
   const [isLoadingModels, setIsLoadingModels] = useState(false);
   const [fetchError, setFetchError] = useState('');
   const [modelSearch, setModelSearch] = useState('');
+  
+  // Local state for slider to be smooth
+  const [localHistoryLimit, setLocalHistoryLimit] = useState(historyLimit);
 
   // API Provider State
   const [apiProvider, setApiProvider] = useState<'google' | 'openrouter'>('google');
@@ -137,6 +143,11 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     } else {
        localStorage.removeItem('soulsync_saved_models');
     }
+
+    // Save history limit
+    if (onHistoryLimitChange) {
+        onHistoryLimitChange(localHistoryLimit);
+    }
     
     // Update service config
     geminiService.updateConfig(trimmedApiKey, trimmedBaseUrl);
@@ -144,7 +155,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
     showDialog({
         type: 'alert',
         title: '保存成功',
-        message: 'API配置已更新！',
+        message: '配置已更新！',
         confirmText: '好的',
         onConfirm: onBack
     });
@@ -166,6 +177,8 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
             setAvailableModels([]);
             setSelectedModelIds(new Set());
             setApiProvider('google');
+            setLocalHistoryLimit(20);
+            if (onHistoryLimitChange) onHistoryLimitChange(20);
             geminiService.updateConfig(); 
             showDialog({ type: 'alert', title: '重置完成', message: '已恢复默认设置' });
         }
@@ -189,55 +202,82 @@ const SettingsView: React.FC<SettingsViewProps> = ({ onBack }) => {
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <h2 className="text-lg font-bold tracking-wide">模型设置</h2>
+        <h2 className="text-lg font-bold tracking-wide">通用设置</h2>
         <div className="w-8"></div> {/* Spacer for alignment */}
       </div>
 
       {/* Scrollable Content */}
       <div className="flex-1 overflow-y-auto p-4 pb-40 max-w-2xl mx-auto w-full space-y-8 scrollbar-hide">
         
-        {/* API Provider Switch */}
-        <div className="space-y-3">
-            <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">服务提供商</label>
-            <div className="p-1 bg-black/40 rounded-xl flex border border-white/5">
-                <button 
-                onClick={() => setApiProvider('google')}
-                className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${apiProvider === 'google' ? 'bg-gradient-to-r from-pink-600/80 to-purple-600/80 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    Google Gemini
-                </button>
-                <button 
-                onClick={() => setApiProvider('openrouter')}
-                className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${apiProvider === 'openrouter' ? 'bg-gradient-to-r from-pink-600/80 to-purple-600/80 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
-                >
-                    OpenRouter
-                </button>
+        {/* Chat Settings Section */}
+        <div className="space-y-4 border-b border-white/10 pb-6">
+            <h3 className="text-sm font-bold text-white mb-2">对话设置</h3>
+            
+            <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                   <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">历史对话轮数上下文 (Max Rounds)</label>
+                   <span className="text-pink-300 font-mono font-bold">{localHistoryLimit}</span>
+                </div>
+                <input 
+                   type="range"
+                   min="2"
+                   max="50"
+                   step="1"
+                   value={localHistoryLimit}
+                   onChange={(e) => setLocalHistoryLimit(parseInt(e.target.value))}
+                   className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                />
+                <p className="text-[10px] text-gray-500 px-1">每次发送消息时携带的历史记录长度。数值越大记忆越好，但消耗Token更多且可能变慢。</p>
             </div>
         </div>
 
-        {/* Inputs */}
-        <div className="space-y-5">
-            <div className="space-y-2">
-                <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">Base URL</label>
-                <input 
-                    type="text" 
-                    value={baseUrl}
-                    onChange={e => setBaseUrl(e.target.value)}
-                    placeholder={apiProvider === 'google' ? "默认 (留空)" : "https://openrouter.ai/api/v1"}
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white focus:border-pink-500/50 outline-none text-sm transition-colors"
-                />
-                <p className="text-[10px] text-gray-500 px-1">若使用代理地址请在此填写</p>
+        {/* API Settings Section */}
+        <div className="space-y-4">
+            <h3 className="text-sm font-bold text-white mb-2">API 设置</h3>
+
+            {/* API Provider Switch */}
+            <div className="space-y-3">
+                <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">服务提供商</label>
+                <div className="p-1 bg-black/40 rounded-xl flex border border-white/5">
+                    <button 
+                    onClick={() => setApiProvider('google')}
+                    className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${apiProvider === 'google' ? 'bg-gradient-to-r from-pink-600/80 to-purple-600/80 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        Google Gemini
+                    </button>
+                    <button 
+                    onClick={() => setApiProvider('openrouter')}
+                    className={`flex-1 py-2.5 text-xs font-bold rounded-lg transition-all ${apiProvider === 'openrouter' ? 'bg-gradient-to-r from-pink-600/80 to-purple-600/80 text-white shadow-sm' : 'text-gray-500 hover:text-gray-300'}`}
+                    >
+                        OpenRouter
+                    </button>
+                </div>
             </div>
-            
-            <div className="space-y-2">
-                <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">API Key</label>
-                <input 
-                    type="password" 
-                    value={apiKey}
-                    onChange={e => setApiKey(e.target.value)}
-                    placeholder="sk-..."
-                    className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white focus:border-pink-500/50 outline-none text-sm transition-colors"
-                />
+
+            {/* Inputs */}
+            <div className="space-y-5">
+                <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">Base URL</label>
+                    <input 
+                        type="text" 
+                        value={baseUrl}
+                        onChange={e => setBaseUrl(e.target.value)}
+                        placeholder={apiProvider === 'google' ? "默认 (留空)" : "https://openrouter.ai/api/v1"}
+                        className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white focus:border-pink-500/50 outline-none text-sm transition-colors"
+                    />
+                    <p className="text-[10px] text-gray-500 px-1">若使用代理地址请在此填写</p>
+                </div>
+                
+                <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-bold uppercase tracking-wider ml-1">API Key</label>
+                    <input 
+                        type="password" 
+                        value={apiKey}
+                        onChange={e => setApiKey(e.target.value)}
+                        placeholder="sk-..."
+                        className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white focus:border-pink-500/50 outline-none text-sm transition-colors"
+                    />
+                </div>
             </div>
         </div>
 

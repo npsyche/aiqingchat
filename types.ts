@@ -8,6 +8,13 @@ export interface Author {
   description: string;
 }
 
+export interface UserPersona {
+  id: string;
+  name: string;
+  description: string; // The prompt/identity details (max 1000 chars)
+  avatar?: string;
+}
+
 export interface Character {
   id: string;
   authorId: string; // Link to an author

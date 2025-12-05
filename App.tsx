@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Character, Message, ViewState, TabState, Author, SavedModel, DialogConfig } from './types';
+import { Character, Message, ViewState, TabState, Author, SavedModel, DialogConfig, UserPersona } from './types';
 import { DEFAULT_CHARACTERS, MOCK_AUTHORS } from './constants';
 import CharacterList from './components/CharacterList';
 import AuthorList from './components/AuthorList';
@@ -25,6 +26,8 @@ const STORAGE_KEY_USER_ID = 'soulsync_current_user_id';
 const STORAGE_KEY_MODELS = 'soulsync_saved_models';
 const STORAGE_KEY_FAVS = 'soulsync_favorites';
 const STORAGE_KEY_FOLLOWING = 'soulsync_following';
+const STORAGE_KEY_PERSONAS = 'soulsync_user_personas';
+const STORAGE_KEY_HISTORY_LIMIT = 'soulsync_history_limit';
 
 export default function App() {
   // State
@@ -40,6 +43,10 @@ export default function App() {
   const [savedModels, setSavedModels] = useState<SavedModel[]>([]);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  
+  // New State for Personas and Settings
+  const [userPersonas, setUserPersonas] = useState<UserPersona[]>([]);
+  const [historyRoundLimit, setHistoryRoundLimit] = useState<number>(20);
   
   // Track previous view for navigation
   const [prevView, setPrevView] = useState<ViewState | null>(null);
@@ -73,6 +80,8 @@ export default function App() {
     const savedUserId = localStorage.getItem(STORAGE_KEY_USER_ID);
     const loadedFavs = localStorage.getItem(STORAGE_KEY_FAVS);
     const loadedFollowing = localStorage.getItem(STORAGE_KEY_FOLLOWING);
+    const loadedPersonas = localStorage.getItem(STORAGE_KEY_PERSONAS);
+    const loadedHistoryLimit = localStorage.getItem(STORAGE_KEY_HISTORY_LIMIT);
 
     // Initialize API Config from LocalStorage if available
     const savedApiKey = localStorage.getItem('soulsync_api_key');
@@ -111,6 +120,14 @@ export default function App() {
         try { setFollowingIds(new Set(JSON.parse(loadedFollowing))); } catch(e){}
     }
 
+    if (loadedPersonas) {
+        try { setUserPersonas(JSON.parse(loadedPersonas)); } catch(e){}
+    }
+
+    if (loadedHistoryLimit) {
+        try { setHistoryRoundLimit(parseInt(loadedHistoryLimit, 10)); } catch(e){}
+    }
+
     if (isLoggedIn === 'true') {
       setView('LIST');
     }
@@ -136,6 +153,14 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY_FOLLOWING, JSON.stringify(Array.from(followingIds)));
   }, [followingIds]);
+
+  useEffect(() => {
+      localStorage.setItem(STORAGE_KEY_PERSONAS, JSON.stringify(userPersonas));
+  }, [userPersonas]);
+
+  useEffect(() => {
+      localStorage.setItem(STORAGE_KEY_HISTORY_LIMIT, historyRoundLimit.toString());
+  }, [historyRoundLimit]);
 
   // Handlers
   const handleLogin = (phone: string) => {
@@ -207,6 +232,10 @@ export default function App() {
     setEditingChar(null);
     setView('LIST');
     setActiveTab('CHARS'); // Go back to list
+  };
+  
+  const handleSilentUpdateCharacter = (updatedChar: Character) => {
+      setCharacters(prev => prev.map(c => c.id === updatedChar.id ? updatedChar : c));
   };
 
   const handleSaveProfile = (updatedData: Partial<Author>) => {
@@ -346,6 +375,68 @@ export default function App() {
           setView('LIST');
       }
   };
+  
+  // Persona Handlers
+  const handleSavePersona = (persona: UserPersona) => {
+      setUserPersonas(prev => {
+          const index = prev.findIndex(p => p.id === persona.id);
+          if (index >= 0) {
+              const updated = [...prev];
+              updated[index] = persona;
+              return updated;
+          }
+          if (prev.length >= 5) return prev; // Max 5 limit check
+          return [...prev, persona];
+      });
+  };
+
+  const handleDeletePersona = (id: string) => {
+      setUserPersonas(prev => prev.filter(p => p.id !== id));
+  };
+
+  // Memory Handlers
+  const handleRegenerateMemory = async (charId: string) => {
+      const char = characters.find(c => c.id === charId);
+      if (!char) return;
+
+      const msgs = messagesMap[charId] || [];
+      // Only summarize actual conversation to create a new memory checkpoint
+      const conversation = msgs.filter(m => !m.isMemory);
+
+      if (conversation.length < 2) {
+          showDialog({ type: 'alert', message: '对话记录过少，无法生成有效记忆。' });
+          return;
+      }
+
+      try {
+          const summary = await geminiService.summarizeMessages(conversation, char.name);
+          if (summary) {
+              const newMemory: Message = {
+                  id: crypto.randomUUID(),
+                  role: 'model',
+                  text: summary,
+                  timestamp: Date.now(),
+                  isMemory: true
+              };
+              setMessagesMap(prev => ({
+                  ...prev,
+                  [charId]: [...(prev[charId] || []), newMemory]
+              }));
+          } else {
+              showDialog({ type: 'alert', message: '无法生成记忆，请稍后再试。' });
+          }
+      } catch (e) {
+          console.error(e);
+          showDialog({ type: 'alert', message: '生成记忆失败，请检查网络或配置。' });
+      }
+  };
+
+  const handleDeleteMemory = (charId: string, msgId: string) => {
+      setMessagesMap(prev => ({
+          ...prev,
+          [charId]: (prev[charId] || []).filter(m => m.id !== msgId)
+      }));
+  };
 
   // Helper getters
   const activeCharacter = characters.find(c => c.id === activeCharId);
@@ -368,6 +459,8 @@ export default function App() {
                     savedModels={savedModels}
                     currentUserId={currentUser.id}
                     isFavorited={favoriteIds.has(activeCharacter.id)}
+                    userPersonas={userPersonas}
+                    historyRoundLimit={historyRoundLimit}
                     onBack={() => setView('LIST')}
                     onEdit={() => handleEditCharacter(activeCharacter)}
                     onSaveMessages={handleSaveMessages}
@@ -375,6 +468,7 @@ export default function App() {
                     onClearHistory={handleClearHistory}
                     onToggleFavorite={() => handleToggleFavorite(activeCharacter.id)}
                     onViewProfile={handleViewCharacterProfile}
+                    onUpdateCharacter={handleSilentUpdateCharacter}
                 />
             )}
 
@@ -390,6 +484,8 @@ export default function App() {
                     onEdit={() => handleEditCharacter(activeCharacter)}
                     onToggleFavorite={() => handleToggleFavorite(activeCharacter.id)}
                     onAuthorClick={handleSelectAuthor}
+                    onRegenerateMemory={() => handleRegenerateMemory(activeCharacter.id)}
+                    onDeleteMemory={(msgId) => handleDeleteMemory(activeCharacter.id, msgId)}
                 />
             )}
 
@@ -441,6 +537,8 @@ export default function App() {
 
             {view === 'SETTINGS' && (
                 <SettingsView 
+                    historyLimit={historyRoundLimit}
+                    onHistoryLimitChange={setHistoryRoundLimit}
                     onBack={() => setView('LIST')}
                 />
             )}
@@ -481,6 +579,9 @@ export default function App() {
                             favoriteIds={favoriteIds}
                             followingIds={followingIds}
                             authors={authors}
+                            userPersonas={userPersonas}
+                            onSavePersona={handleSavePersona}
+                            onDeletePersona={handleDeletePersona}
                             onSelectCharacter={handleSelectCharacter}
                             onSettingsClick={() => setView('SETTINGS')}
                             onLogout={handleLogout}

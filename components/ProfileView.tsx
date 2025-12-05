@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { Character, Author } from '../types';
+
+import React, { useState, useContext } from 'react';
+import { Character, Author, UserPersona } from '../types';
+import { DialogContext } from '../DialogContext';
 
 interface ProfileViewProps {
   currentUser: Author;
@@ -8,6 +10,7 @@ interface ProfileViewProps {
   favoriteIds: Set<string>;
   followingIds: Set<string>;
   authors: Author[];
+  userPersonas: UserPersona[];
   onSelectCharacter: (char: Character) => void;
   onSettingsClick: () => void;
   onLogout: () => void;
@@ -17,6 +20,8 @@ interface ProfileViewProps {
   onEditProfile: () => void;
   onViewFollowers: () => void;
   onViewLikes: () => void;
+  onSavePersona: (p: UserPersona) => void;
+  onDeletePersona: (id: string) => void;
 }
 
 const ProfileView: React.FC<ProfileViewProps> = ({ 
@@ -26,6 +31,7 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     favoriteIds,
     followingIds,
     authors,
+    userPersonas,
     onSelectCharacter, 
     onSettingsClick, 
     onLogout,
@@ -34,9 +40,15 @@ const ProfileView: React.FC<ProfileViewProps> = ({
     onAuthorClick,
     onEditProfile,
     onViewFollowers,
-    onViewLikes
+    onViewLikes,
+    onSavePersona,
+    onDeletePersona
 }) => {
-  const [subView, setSubView] = useState<'OVERVIEW' | 'WORKS' | 'FAVS' | 'FOLLOWING'>('OVERVIEW');
+  const showDialog = useContext(DialogContext);
+  const [subView, setSubView] = useState<'OVERVIEW' | 'WORKS' | 'FAVS' | 'FOLLOWING' | 'PERSONAS'>('OVERVIEW');
+  const [editingPersona, setEditingPersona] = useState<UserPersona | null>(null);
+  const [personaName, setPersonaName] = useState('');
+  const [personaDesc, setPersonaDesc] = useState('');
 
   // Filter favorite characters
   const favoriteCharacters = characters.filter(c => favoriteIds.has(c.id));
@@ -54,6 +66,53 @@ const ProfileView: React.FC<ProfileViewProps> = ({
   const coverSrc = currentUser.avatar.startsWith('data:')
     ? currentUser.avatar
     : `https://picsum.photos/seed/${currentUser.avatar}cover/800/400`;
+
+  const handleEditPersonaClick = (p: UserPersona) => {
+      setEditingPersona(p);
+      setPersonaName(p.name);
+      setPersonaDesc(p.description);
+      setSubView('PERSONAS'); // Ensure we are in view
+  };
+
+  const handleCreatePersonaClick = () => {
+      if (userPersonas.length >= 5) {
+          showDialog({ type: 'alert', message: "最多只能创建 5 个身份设定" });
+          return;
+      }
+      setEditingPersona({ id: '', name: '', description: '' });
+      setPersonaName('');
+      setPersonaDesc('');
+      setSubView('PERSONAS');
+  };
+
+  const handleSavePersonaForm = () => {
+      if (!personaName.trim()) {
+          showDialog({ type: 'alert', message: "请填写身份名称" });
+          return;
+      }
+      if (personaDesc.length > 1000) {
+          showDialog({ type: 'alert', message: "描述不能超过 1000 字" });
+          return;
+      }
+      
+      const newPersona: UserPersona = {
+          id: editingPersona?.id || crypto.randomUUID(),
+          name: personaName.trim(),
+          description: personaDesc.trim()
+      };
+      
+      onSavePersona(newPersona);
+      setEditingPersona(null);
+  };
+
+  const handleDeletePersonaClick = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      showDialog({
+          type: 'confirm',
+          message: '确定删除这个身份设定吗？',
+          onConfirm: () => onDeletePersona(id)
+      });
+  };
 
   const renderCharacterCard = (char: Character, isOwner: boolean) => {
       const avatarSrc = char.avatar || `https://picsum.photos/seed/${char.avatarSeed}/400/600`;
@@ -157,7 +216,62 @@ const ProfileView: React.FC<ProfileViewProps> = ({
       let title = '';
       let content = null;
 
-      if (subView === 'WORKS') {
+      if (subView === 'PERSONAS') {
+          title = '我的身份';
+          content = editingPersona ? (
+              <div className="p-4 space-y-4 animate-fadeIn">
+                  <div>
+                      <label className="text-xs text-purple-300 font-bold mb-1 block">身份名称</label>
+                      <input 
+                         value={personaName} 
+                         onChange={e => setPersonaName(e.target.value)} 
+                         className="w-full bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-pink-500/50 outline-none"
+                         placeholder="例如：旅行者、指挥官..."
+                      />
+                  </div>
+                  <div>
+                      <div className="flex justify-between">
+                          <label className="text-xs text-purple-300 font-bold mb-1 block">身份详情设定</label>
+                          <span className={`text-xs ${personaDesc.length > 1000 ? 'text-red-400' : 'text-gray-500'}`}>{personaDesc.length}/1000</span>
+                      </div>
+                      <textarea 
+                         value={personaDesc} 
+                         onChange={e => setPersonaDesc(e.target.value)} 
+                         className="w-full h-64 bg-black/20 border border-white/10 rounded-xl p-3 text-white focus:border-pink-500/50 outline-none resize-none"
+                         placeholder="在此描述你的身份背景、性格、能力或与角色的特殊关系..."
+                      />
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                      <button onClick={() => setEditingPersona(null)} className="flex-1 py-3 rounded-xl border border-white/10 text-gray-300 font-bold text-sm">取消</button>
+                      <button onClick={handleSavePersonaForm} className="flex-1 py-3 rounded-xl bg-gradient-to-r from-pink-600 to-purple-600 text-white font-bold text-sm shadow-lg">保存设定</button>
+                  </div>
+              </div>
+          ) : (
+             <div className="flex flex-col gap-3 p-4">
+                 <button 
+                    onClick={handleCreatePersonaClick}
+                    className="w-full py-4 border border-dashed border-white/20 rounded-xl flex items-center justify-center gap-2 text-gray-400 hover:text-white hover:border-pink-500/50 hover:bg-white/5 transition mb-2"
+                 >
+                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                     新建身份设定 ({userPersonas.length}/5)
+                 </button>
+                 
+                 {userPersonas.map(p => (
+                     <div key={p.id} className="glass-panel p-4 rounded-xl group relative hover:bg-white/10 transition" onClick={() => handleEditPersonaClick(p)}>
+                         <div className="flex justify-between items-start mb-1">
+                             <h4 className="font-bold text-pink-300">{p.name}</h4>
+                             <button onClick={(e) => handleDeletePersonaClick(p.id, e)} className="text-gray-500 hover:text-red-400 p-1">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                             </button>
+                         </div>
+                         <p className="text-sm text-gray-300 line-clamp-2">{p.description}</p>
+                     </div>
+                 ))}
+                 
+                 {userPersonas.length === 0 && <EmptyState text="暂无身份设定，去创建一个吧！" />}
+             </div>
+          );
+      } else if (subView === 'WORKS') {
           title = '我的作品';
           content = (
              <div className="grid grid-cols-2 gap-4 p-4">
@@ -265,6 +379,12 @@ const ProfileView: React.FC<ProfileViewProps> = ({
       {/* Menu Items */}
       <div className="px-4 mt-8 space-y-2">
         <MenuItem 
+          onClick={() => setSubView('PERSONAS')}
+          icon={<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>} 
+          label="我的身份设定" 
+          highlight={true}
+        />
+        <MenuItem 
           onClick={onSettingsClick}
           icon={<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>} 
           label="设置" 
@@ -301,13 +421,13 @@ const StatItem: React.FC<{ label: string; count: number; onClick: () => void }> 
     </div>
 );
 
-const MenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick?: () => void; textClassName?: string }> = ({ icon, label, onClick, textClassName }) => (
+const MenuItem: React.FC<{ icon: React.ReactNode; label: string; onClick?: () => void; textClassName?: string; highlight?: boolean }> = ({ icon, label, onClick, textClassName, highlight }) => (
   <button 
     onClick={onClick}
-    className="w-full flex items-center gap-3 p-3.5 hover:bg-white/5 rounded-2xl transition-all group border border-transparent hover:border-white/5"
+    className={`w-full flex items-center gap-3 p-3.5 rounded-2xl transition-all group border border-transparent hover:border-white/5 ${highlight ? 'bg-gradient-to-r from-pink-500/10 to-purple-500/10 border-pink-500/20 hover:from-pink-500/20' : 'hover:bg-white/5'}`}
   >
-    <div className={`text-gray-400 group-hover:text-gray-300 transition-colors ${textClassName?.includes('red') ? 'text-red-400' : ''}`}>{icon}</div>
-    <span className={`text-sm font-medium transition-colors ${textClassName || 'text-slate-300'}`}>{label}</span>
+    <div className={`text-gray-400 group-hover:text-gray-300 transition-colors ${textClassName?.includes('red') ? 'text-red-400' : ''} ${highlight ? 'text-pink-400' : ''}`}>{icon}</div>
+    <span className={`text-sm font-medium transition-colors ${textClassName || 'text-slate-300'} ${highlight ? 'text-pink-100 font-bold' : ''}`}>{label}</span>
     <svg className="ml-auto text-gray-600 group-hover:text-gray-400" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m9 18 6-6-6-6"/></svg>
   </button>
 );
