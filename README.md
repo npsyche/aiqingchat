@@ -17,16 +17,19 @@
    * *(如果你想使用 DeepSeek, Claude 等其他模型，可切换到 OpenRouter 模式并填入 Base URL)*
 4. 点击 **“保存配置”**。
 
-![API设置](settings_api.png)
+<img src="public/settings_api.png" alt="API设置" style="zoom:50%;" />
+
+<img src="public/settings_api2.png" alt="API设置" style="zoom:50%;" />
 
 ### 2. 邂逅角色 (Discover)
+
 配置完成后，回到首页 **“邂逅”** 页面。
 *   你可以在 **“热门”** 和 **“最新”** 榜单中浏览角色。
 *   使用顶部 **搜索栏** 寻找特定的标签或名字。
 *   点击感兴趣的角色卡片，查看TA的详细档案、亲密度等级和背景故事。
 
-![角色列表](home_list.png)
-![角色档案](char_profile.png)
+<img src="public/home_list.png" alt="角色列表" style="zoom:50%;" />
+<img src="public/char_profile.png" alt="角色档案" style="zoom:50%;" />
 
 ### 3. 沉浸对话 (Immersive Chat)
 点击 **“发消息”** 进入聊天界面，享受沉浸式的互动体验。
@@ -34,8 +37,8 @@
 *   **身份切换**：点击 **面具图标** (🎭)，随时切换你在对话中的身份设定（如“青梅竹马”、“死对头”）。
 *   **更多功能**：点击右上角菜单，可以 **更换聊天背景**、**导出聊天记录** 或 **收藏角色**。
 
-![聊天界面](chat_view.png)
-![聊天菜单](chat_menu.png)
+<img src="public/chat_view.png" alt="聊天界面" style="zoom: 25%;" />
+<img src="public/chat_menu.png" alt="聊天菜单" style="zoom:50%;" />
 
 ### 4. 创造角色 (Create)
 想拥有独一无二的 AI 伴侣？点击底部中间的 **“+”** 号。
@@ -43,14 +46,16 @@
 *   **一键人设**：使用内置的“霸道总裁”、“病娇”、“傲娇”等模板快速填充人设。
 *   **详细设定**：支持编写详细的 System Prompt (系统指令) 和开场白。
 
-![创造角色](create_char.png)
+创造角色
 
 ### 5. 打造你的身份 (Personas)
 在 **“我的”** -> **“我的身份设定”** 中，你可以预设多个“马甲”。
 *   在与不同角色聊天时，选择不同的身份，AI 会根据你的人设做出不同的反应。
     *   *比如：在聊“校园剧本”时使用“转校生”身份，在聊“古风剧本”时使用“刺客”身份。*
 
-![身份设定](user_persona.png)
+<img src="public/user_persona.png" alt="身份设定" style="zoom:20%;" />
+
+<img src="public/user_persona2.png" alt="身份设定" style="zoom:33%;" />
 
 ---
 
