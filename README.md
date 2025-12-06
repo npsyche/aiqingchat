@@ -177,6 +177,8 @@ npm run dev
 
 我干了，您随意~~
 
+*如需在**赞助者列表**中显示您的个人链接，请在"赞助备注"中填写您的Github ID或联系方式*
+
 <img src="D:\code\aiqingchat-old\public\随意打赏.jpg" style="zoom: 33%;" />
 
 ------
