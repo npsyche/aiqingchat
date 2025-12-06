@@ -46,7 +46,7 @@
 *   **一键人设**：使用内置的“霸道总裁”、“病娇”、“傲娇”等模板快速填充人设。
 *   **详细设定**：支持编写详细的 System Prompt (系统指令) 和开场白。
 
-创造角色
+<img src="D:\code\aiqingchat-old\public\create_char2.png" style="zoom:33%;" />
 
 ### 5. 打造你的身份 (Personas)
 在 **“我的”** -> **“我的身份设定”** 中，你可以预设多个“马甲”。
@@ -172,6 +172,14 @@ npm run dev
 4.  新建 Pull Request
 
 ---
+
+## 🍵 打赏开发人员
+
+我干了，您随意~~
+
+<img src="D:\code\aiqingchat-old\public\随意打赏.jpg" style="zoom: 33%;" />
+
+------
 
 ## 📄 开源协议 (License)
 
