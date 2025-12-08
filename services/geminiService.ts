@@ -65,8 +65,9 @@ export class GeminiService {
     // We append the user persona to the system instruction so the model knows who it is talking to.
     let finalSystemInstruction = characterInstruction;
     if (userPersona && userPersona.trim().length > 0) {
-        finalSystemInstruction += `\n\n[User Identity/Persona Context]\nThe user you are talking to is defined as follows:\n${userPersona}\nStay in character and react to this identity accordingly.`;
-    }
+        //finalSystemInstruction += `\n\n[User Identity/Persona Context]\nThe user you are talking to is defined as follows:\n${userPersona}\nStay in character and react to this identity accordingly.`;
+        finalSystemInstruction += `\n\n[用户身份及上下文背景]\n\n${userPersona}\n`;
+      }
     this.systemInstruction = finalSystemInstruction;
 
     // 2. Truncate History
@@ -105,7 +106,7 @@ export class GeminiService {
       const formattedHistory: Content[] = effectiveHistory.map(msg => {
         // If it's a memory node, format it as a user note to context
         const text = msg.isMemory 
-          ? `[System Note: The following is a summary of the previous conversation to provide context: ${msg.text}]` 
+          ? `[历史对话信息汇总: ${msg.text}]` 
           : msg.text;
           
         return {
@@ -128,7 +129,7 @@ export class GeminiService {
       // OpenRouter/OpenAI Mode - Prepare history
       this.manualHistory = effectiveHistory.map(msg => {
          const text = msg.isMemory 
-          ? `[System Note: Previous conversation summary: ${msg.text}]` 
+          ? `[历史对话信息总结: ${msg.text}]` 
           : msg.text;
 
          return {
@@ -178,7 +179,7 @@ export class GeminiService {
             'Authorization': `Bearer ${this.apiKey}`,
             // OpenRouter specific headers
             'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-            'X-Title': 'AI Qing'
+            'X-Title': 'AI Qing Chat'
           },
           body: JSON.stringify({
             model: this.currentModel,
@@ -266,7 +267,7 @@ export class GeminiService {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apiKey}`,
             'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-            'X-Title': 'AI Qing'
+            'X-Title': 'AI Qing Chat'
           },
           body: JSON.stringify({
             model: this.currentModel, // Use current model or a cheap one
@@ -293,13 +294,13 @@ export class GeminiService {
   async summarizeMessages(messages: Message[], characterName: string): Promise<string> {
     const transcript = messages.map(m => {
         const speaker = m.role === 'user' ? 'User' : characterName;
-        const content = m.isMemory ? `(Previous Summary: ${m.text})` : m.text;
+        const content = m.isMemory ? `(历史对话信息总结: ${m.text})` : m.text;
         return `${speaker}: ${content}`;
     }).join('\n');
 
-    const prompt = `Summarize the following conversation between User and ${characterName} into a concise paragraph (under 200 words). Capture key events, emotional progress, and important facts.
+    const prompt = `总结以下用户与${characterName}之间的对话，形成一段简洁的总结（不超过150字）。提取关键事件、情感进展和重要事实。
     
-    Conversation:
+    对话内容：
     ${transcript}`;
 
     try {
@@ -317,7 +318,7 @@ export class GeminiService {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${this.apiKey}`,
               'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-              'X-Title': 'AI Qing'
+              'X-Title': 'AI Qing Chat'
             },
             body: JSON.stringify({
               model: this.currentModel,
@@ -398,7 +399,7 @@ export class GeminiService {
             headers: { 
               'Authorization': `Bearer ${this.apiKey}`,
               'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-              'X-Title': 'AI Qing' // Changed from AI卿
+              'X-Title': 'AI Qing Chat' // Changed from AI卿
             }
         });
         

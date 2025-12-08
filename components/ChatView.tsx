@@ -292,31 +292,8 @@ const ChatView: React.FC<ChatViewProps> = ({
         m.id === botMessageId ? { ...m, text: fullResponseText } : m
       );
       
-      if (finalMessages.length > 30) {
-          const msgsToSummarize = finalMessages.slice(0, 20);
-          const recentMsgs = finalMessages.slice(20);
-          
-          geminiService.summarizeMessages(msgsToSummarize, character.name).then(summary => {
-             if (summary) {
-                 const memoryNode: Message = {
-                     id: crypto.randomUUID(),
-                     role: 'model', 
-                     text: summary,
-                     timestamp: Date.now(),
-                     isMemory: true
-                 };
-                 const compactedHistory = [memoryNode, ...recentMsgs];
-                 setMessages(compactedHistory);
-                 onSaveMessages(compactedHistory);
-                 const personaContext = activePersona ? activePersona.description : '';
-                 geminiService.startChat(character.systemInstruction, compactedHistory, selectedModel, personaContext, historyRoundLimit);
-             } else {
-                 onSaveMessages(finalMessages);
-             }
-          });
-      } else {
-          onSaveMessages(finalMessages);
-      }
+      // Save all messages, do not summarize and delete old history
+      onSaveMessages(finalMessages);
 
     } catch (error) {
       console.error("Chat Error", error);
@@ -519,7 +496,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
   // Render Markdown Content
   const renderMessageContent = (text: string) => {
-      // 检查是否有markdown语法特征，有的话再进行markdown解析
+    // 检查是否有markdown语法特征，有的话再进行markdown解析
     const markdownRegex = /(\*\*|__|\*|_|~~|`|>|\[|\]|\(|\)|#|-|\+|!)/;
     if (!markdownRegex.test(text)) {
       const regex = /(\([\s\S]*?\)|（[\s\S]*?）|".*?"|“.*?”)/g;
@@ -534,7 +511,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         return <span key={i} className="text-slate-200">{part}</span>;
       });
     }
-      
+
     try {
       // 1. Parse Markdown to HTML
       const rawHtml = marked.parse(text) as string;
@@ -826,7 +803,6 @@ const ChatView: React.FC<ChatViewProps> = ({
                     ) : (
                        <div className="flex items-center gap-1">
                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
-                         <span>帮我回</span>
                        </div>
                     )}
                  </button>
