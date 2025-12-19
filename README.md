@@ -95,7 +95,7 @@
 git clone https://github.com/npsyche/aiqingchat.git
 
 # 进入目录
-cd ai-qing
+cd aiqingchat
 
 # 安装依赖 (推荐使用 npm 或 pnpm)
 npm install
@@ -170,16 +170,6 @@ npm run dev
 2.  新建 Feat_xxx 分支
 3.  提交代码
 4.  新建 Pull Request
-
----
-
-## 🍵 打赏开发人员
-
-我干了，您随意~~
-
-*如需在**赞助者列表**中显示您的个人链接，请在"赞助备注"中填写您的Github ID或联系方式*
-
-<img src="public/随意打赏.jpg" style="zoom: 33%;" />
 
 ------
 
